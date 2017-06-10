@@ -14,6 +14,7 @@ import android.os.SystemClock;
 import android.service.media.MediaBrowserService;
 import android.util.Log;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
@@ -26,6 +27,7 @@ import com.google.gson.GsonBuilder;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.IllegalFormatCodePointException;
 import java.util.List;
 
 public class ServicioMusicBrowserTest extends MediaBrowserService {
@@ -70,12 +72,16 @@ public class ServicioMusicBrowserTest extends MediaBrowserService {
                 .putLong(MediaMetadata.METADATA_KEY_DURATION, 121000)
                 .build());*/
         mPlayer = new MediaPlayer();
+
+
         mSession = new MediaSession(this, "MiServicioMusical");
         setSessionToken(mSession.getSessionToken());
 
         mSession.setCallback(new MediaSession.Callback() {
             @Override
             public void onPlayFromMediaId(String mediaId, Bundle extras) {
+                Log.e(TAG,"----------ON PLAY FROM MEDIA ID--------");
+                //mSession.setPlaybackState(buildState(PlaybackState.STATE_PAUSED));
                 for (MediaMetadata item : mMusic) {
                     if (item.getDescription().getMediaId().equals(mediaId)) {
                         mCurrentTrack = item;
@@ -91,6 +97,7 @@ public class ServicioMusicBrowserTest extends MediaBrowserService {
                     mCurrentTrack = mMusic.get(0);
                     handlePlay();
                 } else {
+                    Log.e(TAG,"----------ON PLAY--------");
                     mPlayer.start();
                     mSession.setPlaybackState(buildState(PlaybackState.STATE_PLAYING));
                 }
@@ -98,12 +105,25 @@ public class ServicioMusicBrowserTest extends MediaBrowserService {
 
             @Override
             public void onPause() {
+                Log.e(TAG,"----------ON PAUSE--------");
+                if (mPlayer.isPlaying()) {
+                    Log.e(TAG,"----------PAUSED--------");
+                    mPlayer.pause();
+                    mSession.setPlaybackState(buildState(PlaybackState.STATE_PAUSED));
+                }
+            }
+
+            @Override
+            public void onStop() {
+                Log.e(TAG,"----------ON STOP--------");
                 mPlayer.pause();
-                mSession.setPlaybackState(buildState(PlaybackState.STATE_PAUSED));
+                mPlayer.seekTo(0);
+
             }
 
             @Override
             public void onSkipToNext() {
+                Log.e(TAG,"----------ON SKIP TO NEXT--------");
                 int cancionSiguiente = mMusic.indexOf(mCurrentTrack) +1;
                 if (cancionSiguiente == mMusic.size()){
                     mCurrentTrack = mMusic.get(0);
@@ -116,13 +136,13 @@ public class ServicioMusicBrowserTest extends MediaBrowserService {
 
             @Override
             public void onSeekTo(long pos) {
-                if (pos >= mPlayer.getCurrentPosition()){
-                    onSkipToNext();
-                }
+                Log.e(TAG,"----------ON SEEK TO--------");
+                mPlayer.seekTo((int) pos);
             }
 
             @Override
             public void onSkipToPrevious() {
+                Log.e(TAG,"----------ON SKIP TO PREVIOUS--------");
                 int cancionSiguiente = mMusic.indexOf(mCurrentTrack) - 1;
                 if (cancionSiguiente < 0){
                     mCurrentTrack = mMusic.get(mMusic.size() - 1);
@@ -139,7 +159,22 @@ public class ServicioMusicBrowserTest extends MediaBrowserService {
     }
 
     private PlaybackState buildState(int state) {
-
+        String temp = "";
+        switch (state){
+            case 0:
+                temp = "STATE_NONE";
+                break;
+            case 1:
+                temp = "STATE_STOPPED";
+                break;
+            case 2:
+                temp = "STATE_PAUSED";
+                break;
+            case 3:
+                temp = "STATE_PLAYING";
+                break;
+        }
+        Log.e(TAG,"----------BUILD STATE-------- "+temp);
         return new PlaybackState.Builder().setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_SKIP_TO_PREVIOUS
                 | PlaybackState.ACTION_SKIP_TO_NEXT
                 | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_PAUSE)
@@ -148,31 +183,45 @@ public class ServicioMusicBrowserTest extends MediaBrowserService {
     }
 
     private void handlePlay() {
-        mPlayer.seekTo(0);
-        mSession.setPlaybackState(buildState(PlaybackState.STATE_PLAYING));
+        Log.e(TAG,"----------HANDLE PLAY--------");
+        mSession.setPlaybackState(buildState(PlaybackState.STATE_PAUSED));
         mSession.setMetadata(mCurrentTrack);
         try {
+            mPlayer.seekTo(0);
             mPlayer.reset();
             mPlayer.setDataSource(ServicioMusicBrowserTest.this,
                     Uri.parse(mCurrentTrack.getDescription().getMediaId()));
+            mPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                @Override
+                public void onCompletion(MediaPlayer mp) {
+                    Log.e(TAG,"----------ON COMPLETION LISTENER -- ON COMPLET --------");
+                    mSession.setPlaybackState(buildState(PlaybackState.STATE_PAUSED));
+                    int cancionSiguiente = mMusic.indexOf(mCurrentTrack) +1;
+                    if (cancionSiguiente == mMusic.size()){
+                        mCurrentTrack = mMusic.get(0);
+                        handlePlay();
+                    }else{
+                        mCurrentTrack = mMusic.get(cancionSiguiente);
+                        handlePlay();
+                    }
+                }
+            });
+            mPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                @Override
+                public void onPrepared(MediaPlayer mediaPlayer) {
+                    Log.e(TAG,"----------ON PREPARE LISTENER -- ON PREPARED--------");
+                    mediaPlayer.seekTo(0);
+                    mediaPlayer.start();
+                    mSession.setPlaybackState(buildState(PlaybackState.STATE_PLAYING));
+                }
+            });
+            mPlayer.prepareAsync();
+            Log.e(TAG,"----------PREPARED SYNC--------");
         } catch (IOException e) {
+            Log.e(TAG,"----------ERROR PREPARED SYNC--------");
             e.printStackTrace();
         }
-        mPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-            @Override
-            public void onCompletion(MediaPlayer mp) {
-                mp.seekTo(0);
-                mSession.setPlaybackState(buildState(PlaybackState.STATE_PLAYING));
-            }
-        });
-        mPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-            @Override
-            public void onPrepared(MediaPlayer mediaPlayer) {
-                mediaPlayer.start();
-            }
-        });
 
-        mPlayer.prepareAsync();
     }
 
     @Override

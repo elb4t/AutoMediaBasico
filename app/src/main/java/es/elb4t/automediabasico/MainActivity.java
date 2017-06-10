@@ -1,5 +1,7 @@
 package es.elb4t.automediabasico;
 
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -23,6 +25,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView txtLog;
     private Gson gson;
     private Musica musica;
+    Intent i;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,6 +44,17 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View view) {
                 //descargamos el fichero JSON mediante Volley
                 getRepositorioMusical();
+            }
+        });
+        FloatingActionButton fab2 = (FloatingActionButton) findViewById(R.id.floatingActionButton2);
+        fab2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                i = new Intent(Intent.ACTION_MAIN);
+                PackageManager manager = getPackageManager();
+                i = manager.getLaunchIntentForPackage("com.google.android.projection.gearhead");
+                i.addCategory(Intent.CATEGORY_LAUNCHER);
+                startActivity(i);
             }
         });
 

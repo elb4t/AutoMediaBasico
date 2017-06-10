@@ -28,16 +28,28 @@ public class ServicioMusicBrowserTest extends MediaBrowserService {
         super.onCreate();
         mMusic = new ArrayList<MediaMetadata>();
         //Añadimos 3 canciones desde la librería de audio de youtube
-        mMusic.add(new MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_MEDIA_ID, "https://www.youtube.com/audiolibrary_download?vid=f5cfb6bd8c048b98").putString(MediaMetadata.METADATA_KEY_TITLE, "Primera canción").putString(MediaMetadata.METADATA_KEY_ARTIST, "Artista 1").putLong(MediaMetadata.METADATA_KEY_DURATION, 109000)
+        mMusic.add(new MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_MEDIA_ID, "https://www.youtube.com/audiolibrary_download?vid=f5cfb6bd8c048b98")
+                .putString(MediaMetadata.METADATA_KEY_TITLE, "Primera canción")
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, "Artista 1")
+                .putLong(MediaMetadata.METADATA_KEY_DURATION, 109000)
                 .build());
         mMusic.add(new MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_MEDIA_ID, "https://www.youtube.com/audiolibrary_download?vid=ac7a38f4a568229c")
-                .putString(MediaMetadata.METADATA_KEY_TITLE, "Segunda canción").putString(MediaMetadata.METADATA_KEY_ARTIST, "Artista 2").putLong(MediaMetadata.METADATA_KEY_DURATION, 65000)
+                .putString(MediaMetadata.METADATA_KEY_TITLE, "Segunda canción")
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, "Artista 2")
+                .putLong(MediaMetadata.METADATA_KEY_DURATION, 65000)
                 .build());
-        mMusic.add(new MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_MEDIA_ID, "https://www.youtube.com/audiolibrary_download?vid=456229530454affd").putString(MediaMetadata.METADATA_KEY_TITLE, "Tercera canción").putString(MediaMetadata.METADATA_KEY_ARTIST, "Artista 3").putLong(MediaMetadata.METADATA_KEY_DURATION, 121000)
+        mMusic.add(new MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_MEDIA_ID, "https://www.youtube.com/audiolibrary_download?vid=456229530454affd")
+                .putString(MediaMetadata.METADATA_KEY_TITLE, "Tercera canción")
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, "Artista 3")
+                .putLong(MediaMetadata.METADATA_KEY_DURATION, 121000)
                 .build());
         mPlayer = new MediaPlayer();
         mSession = new MediaSession(this, "MiServicioMusical");
+        setSessionToken(mSession.getSessionToken());
+
         mSession.setCallback(new MediaSession.Callback() {
             @Override
             public void onPlayFromMediaId(String mediaId, Bundle extras) {
@@ -66,10 +78,41 @@ public class ServicioMusicBrowserTest extends MediaBrowserService {
                 mPlayer.pause();
                 mSession.setPlaybackState(buildState(PlaybackState.STATE_PAUSED));
             }
+
+            @Override
+            public void onSkipToNext() {
+                int cancionSiguiente = mMusic.indexOf(mCurrentTrack) +1;
+                if (cancionSiguiente == mMusic.size()){
+                    mCurrentTrack = mMusic.get(0);
+                    handlePlay();
+                }else{
+                    mCurrentTrack = mMusic.get(cancionSiguiente);
+                    handlePlay();
+                }
+            }
+
+            @Override
+            public void onSeekTo(long pos) {
+                if (pos >= mPlayer.getCurrentPosition()){
+                    onSkipToNext();
+                }
+            }
+
+            @Override
+            public void onSkipToPrevious() {
+                int cancionSiguiente = mMusic.indexOf(mCurrentTrack) - 1;
+                if (cancionSiguiente < 0){
+                    mCurrentTrack = mMusic.get(mMusic.size() - 1);
+                    handlePlay();
+                }else{
+                    mCurrentTrack = mMusic.get(cancionSiguiente);
+                    handlePlay();
+                }
+            }
         });
         mSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
         mSession.setActive(true);
-        setSessionToken(mSession.getSessionToken());
+
     }
 
     private PlaybackState buildState(int state) {
@@ -92,12 +135,20 @@ public class ServicioMusicBrowserTest extends MediaBrowserService {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        mPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+            @Override
+            public void onCompletion(MediaPlayer mp) {
+                mp.seekTo(0);
+                mSession.setPlaybackState(buildState(PlaybackState.STATE_PLAYING));
+            }
+        });
         mPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
             @Override
             public void onPrepared(MediaPlayer mediaPlayer) {
                 mediaPlayer.start();
             }
         });
+
         mPlayer.prepareAsync();
     }
 

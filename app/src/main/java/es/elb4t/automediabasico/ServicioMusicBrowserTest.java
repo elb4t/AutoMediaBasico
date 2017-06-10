@@ -12,23 +12,46 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.SystemClock;
 import android.service.media.MediaBrowserService;
+import android.util.Log;
+import android.widget.TextView;
+
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ServicioMusicBrowserTest extends MediaBrowserService {
+    private final String TAG = ServicioMusicBrowserTest.this.getClass().getSimpleName();
     private MediaSession mSession;
     private List<MediaMetadata> mMusic;
     private MediaPlayer mPlayer;
     private MediaMetadata mCurrentTrack;
 
+    private final String URL = "http://storage.googleapis.com/automotive-media/music.json";
+    private RequestQueue requestQueue;
+    private Gson gson;
+    private Musica musica;
+
     @Override
     public void onCreate() {
         super.onCreate();
+        requestQueue = Volley.newRequestQueue(this);
+        GsonBuilder gsonBuilder = new GsonBuilder();
+        gson = gsonBuilder.create();
+
         mMusic = new ArrayList<MediaMetadata>();
+        getRepositorioMusical();
+
         //Añadimos 3 canciones desde la librería de audio de youtube
-        mMusic.add(new MediaMetadata.Builder()
+/*        mMusic.add(new MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_MEDIA_ID, "https://www.youtube.com/audiolibrary_download?vid=f5cfb6bd8c048b98")
                 .putString(MediaMetadata.METADATA_KEY_TITLE, "Primera canción")
                 .putString(MediaMetadata.METADATA_KEY_ARTIST, "Artista 1")
@@ -45,7 +68,7 @@ public class ServicioMusicBrowserTest extends MediaBrowserService {
                 .putString(MediaMetadata.METADATA_KEY_TITLE, "Tercera canción")
                 .putString(MediaMetadata.METADATA_KEY_ARTIST, "Artista 3")
                 .putLong(MediaMetadata.METADATA_KEY_DURATION, 121000)
-                .build());
+                .build());*/
         mPlayer = new MediaPlayer();
         mSession = new MediaSession(this, "MiServicioMusical");
         setSessionToken(mSession.getSessionToken());
@@ -170,4 +193,44 @@ public class ServicioMusicBrowserTest extends MediaBrowserService {
     public void onDestroy() {
         mSession.release();
     }
+
+    private void getRepositorioMusical() {
+        StringRequest request = new StringRequest(Request.Method.GET, URL, onPostsLoaded, onPostsError);
+        requestQueue.add(request);
+    }
+
+    private final Response.Listener<String> onPostsLoaded = new Response.Listener<String>() {
+        @Override
+        public void onResponse(String response) {
+            musica = gson.fromJson(response, Musica.class);
+            Log.d(TAG, "Número de pistas de audio: " + musica.getMusica().size());
+
+            int slashPos = URL.lastIndexOf('/');
+            String path = URL.substring(0, slashPos + 1);
+
+            for (int i = 0; i < musica.getMusica().size(); i++) {
+                PistaAudio pista = musica.getMusica().get(i);
+                if (!pista.getSource().startsWith("http"))
+                    pista.setSource(path + pista.getSource());
+                if (!pista.getImage().startsWith("http"))
+                    pista.setImage(path + pista.getImage());
+                musica.getMusica().set(i, pista);
+
+                mMusic.add(new MediaMetadata.Builder()
+                        .putString(MediaMetadata.METADATA_KEY_MEDIA_ID, musica.getMusica().get(i).getSource())
+                        .putString(MediaMetadata.METADATA_KEY_TITLE, musica.getMusica().get(i).getTitle())
+                        .putString(MediaMetadata.METADATA_KEY_ARTIST, musica.getMusica().get(i).getArtist())
+                        .putLong(MediaMetadata.METADATA_KEY_DURATION, musica.getMusica().get(i).getDuration() * 1000)
+                        .putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, musica.getMusica().get(i).getImage())
+                        .build());
+            }
+
+        }
+    };
+    private final Response.ErrorListener onPostsError = new Response.ErrorListener() {
+        @Override
+        public void onErrorResponse(VolleyError error) {
+            Log.e(TAG, error.toString());
+        }
+    };
 }
